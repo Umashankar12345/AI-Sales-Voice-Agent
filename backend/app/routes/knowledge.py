@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import csv
@@ -7,7 +7,10 @@ import time
 import xml.etree.ElementTree as ET
 import zipfile
 
+from app.auth import CurrentUser, get_optional_user
 from app.rag import rag_service
+
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024  # 5 MB limit
 
 router = APIRouter(prefix="/api/knowledge", tags=["Knowledge Base & RAG"])
 
@@ -29,13 +32,14 @@ async def get_all_chunks():
     }
 
 @router.post("/search")
-async def search_knowledge(req: SearchQuery):
+async def search_knowledge(req: SearchQuery, current: Optional[CurrentUser] = Depends(get_optional_user)):
     """
     Interactive endpoint to test FAISS cosine similarity retrieval.
     Shows the exact retrieved context and similarity scores for demonstration.
     """
     start_time = time.time()
-    results = rag_service.search(req.query, top_k=req.top_k)
+    org_id = current.org_id if current else "org_default"
+    results = rag_service.search(req.query, top_k=req.top_k, org_id=org_id)
     duration_ms = round((time.time() - start_time) * 1000, 2)
 
     return {
@@ -74,12 +78,16 @@ async def upload_knowledge_document(
     file: Optional[UploadFile] = File(None),
     title: Optional[str] = Form(None),
     pasted_text: Optional[str] = Form(None),
+    current: Optional[CurrentUser] = Depends(get_optional_user),
 ):
     """Upload PDF, DOCX, TXT, CSV, or pasted text to the live FAISS RAG knowledge base."""
+    org_id = current.org_id if current else "org_default"
     if file is not None:
         raw = await file.read()
         if not raw:
             raise HTTPException(status_code=422, detail="Uploaded file is empty")
+        if len(raw) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="File exceeds 5 MB upload limit")
         source_name = (title or file.filename or "Uploaded Document").strip()
         extracted = _extract_text_from_upload(file.filename or "doc.txt", raw)
     elif pasted_text and pasted_text.strip():
@@ -88,12 +96,27 @@ async def upload_knowledge_document(
     else:
         raise HTTPException(status_code=400, detail="Provide either a file (.pdf/.docx/.txt/.csv) or pasted_text.")
 
-    added = rag_service.add_document(source_name, extracted)
+    added = rag_service.add_document(source_name, extracted, org_id=org_id)
+    if added == -1:
+        raise HTTPException(status_code=409, detail="Duplicate document already indexed for this organization.")
     if added == 0:
         raise HTTPException(status_code=422, detail="No indexable text found in document.")
     return {
         "success": True,
         "source": source_name,
+        "org_id": org_id,
         "chunks_added": added,
         "total_chunks": len(rag_service.chunks),
     }
+
+
+@router.delete("/document/{source_name}")
+async def delete_knowledge_document(
+    source_name: str,
+    current: Optional[CurrentUser] = Depends(get_optional_user),
+):
+    org_id = current.org_id if current else "org_default"
+    removed = rag_service.delete_document(source_name, org_id=org_id)
+    if removed == 0:
+        raise HTTPException(status_code=404, detail="Document not found for this organization.")
+    return {"success": True, "source": source_name, "chunks_removed": removed, "total_chunks": len(rag_service.chunks)}

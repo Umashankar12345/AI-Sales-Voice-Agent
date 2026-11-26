@@ -1,15 +1,19 @@
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+from collections import defaultdict
+import time
 import uvicorn
 from datetime import datetime, timedelta
 
 from app.config import settings
 from app.database import db
 from app.rag import rag_service
+from app import auth
 from app.routes import agent, leads, appointments, dashboard, knowledge, settings as settings_route, voice_live
 
 logging.basicConfig(
@@ -53,7 +57,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Sliding-window per-IP rate limiter (180 requests / 60s)
+_rate_buckets: dict[str, list[float]] = defaultdict(list)
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    if request.url.path.startswith("/api/"):
+        client_ip = request.client.host if request.client else "unknown"
+        now = time.time()
+        window = [t for t in _rate_buckets[client_ip] if now - t < 60.0]
+        if len(window) >= 180:
+            return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded. Try again shortly."})
+        window.append(now)
+        _rate_buckets[client_ip] = window
+    return await call_next(request)
+
 # Register API routers
+app.include_router(auth.router)
 app.include_router(agent.router)
 app.include_router(leads.router)
 app.include_router(appointments.router)

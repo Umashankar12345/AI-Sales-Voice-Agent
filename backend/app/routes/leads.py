@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -6,6 +6,7 @@ import csv
 import io
 from bson import ObjectId
 
+from app.auth import CurrentUser, get_optional_user
 from app.database import db
 from app.lead_scorer import calculate_lead_score, evaluate_bant
 from app.services.memory_service import get_lead_memories
@@ -53,15 +54,18 @@ async def get_leads(
     category: Optional[str] = Query(None, description="Filter by Hot, Warm, Cold"),
     course: Optional[str] = Query(None, description="Filter by course"),
     limit: int = 50,
-    skip: int = 0
+    skip: int = 0,
+    current: Optional[CurrentUser] = Depends(get_optional_user),
 ):
     """
-    Returns list of leads from MongoDB with optional search and category filters.
+    Returns list of leads from MongoDB with optional search, category, and tenant scoping.
     """
     if not db.connected or db.db is None:
         return {"total": 0, "leads": []}
 
-    query = {}
+    query: Dict[str, Any] = {}
+    if current:
+        query["org_id"] = current.org_id
     if category and category.lower() != "all":
         query["lead_category"] = category.capitalize()
 
@@ -89,19 +93,24 @@ async def get_leads(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/{lead_id}")
-async def get_lead(lead_id: str):
+async def get_lead(lead_id: str, current: Optional[CurrentUser] = Depends(get_optional_user)):
     if not db.connected or db.db is None:
         raise HTTPException(status_code=404, detail="Lead not found")
     try:
-        doc = db.db.leads.find_one({"_id": ObjectId(lead_id)})
+        q: Dict[str, Any] = {"_id": ObjectId(lead_id)}
+        if current:
+            q["org_id"] = current.org_id
+        doc = db.db.leads.find_one(q)
         if not doc:
             raise HTTPException(status_code=404, detail="Lead not found")
         return serialize_doc(doc)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid lead id: {e}")
 
 @router.post("")
-async def create_lead(lead: LeadCreate):
+async def create_lead(lead: LeadCreate, current: Optional[CurrentUser] = Depends(get_optional_user)):
     if not db.connected or db.db is None:
         raise HTTPException(status_code=500, detail="Database not connected")
 
@@ -109,6 +118,7 @@ async def create_lead(lead: LeadCreate):
     score, category = calculate_lead_score(lead_dict)
     now = datetime.utcnow()
     lead_dict.update({
+        "org_id": current.org_id if current else "org_default",
         "lead_score": score,
         "lead_category": category,
         "sentiment": "Neutral",
@@ -210,27 +220,35 @@ async def get_hubspot_sync_logs(limit: int = 30):
     return {"logs": [serialize_doc(doc) for doc in cursor]}
 
 
+def _csv_safe(value: Any) -> str:
+    s = "" if value is None else str(value)
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
+
+
 @router.get("/export/csv")
-async def export_leads_csv():
-    """Export all CRM leads as a downloadable CSV."""
+async def export_leads_csv(current: Optional[CurrentUser] = Depends(get_optional_user)):
+    """Export CRM leads as a downloadable CSV with formula-injection protection."""
     if not db.connected or db.db is None:
         return Response(content="name,email,phone,interested_course,lead_score,lead_category,bant_total,sentiment,do_not_call\n", media_type="text/csv")
 
+    query: Dict[str, Any] = {"org_id": current.org_id} if current else {}
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(["id", "name", "email", "phone", "interested_course", "lead_score", "lead_category", "bant_total", "sentiment", "do_not_call", "created_at"])
-    for doc in db.db.leads.find().sort("created_at", -1):
+    for doc in db.db.leads.find(query).sort("created_at", -1):
         bant = doc.get("bant") or {}
         writer.writerow([
-            str(doc.get("_id", "")),
-            doc.get("name", ""),
-            doc.get("email", ""),
-            doc.get("phone", ""),
-            doc.get("interested_course", ""),
+            _csv_safe(doc.get("_id", "")),
+            _csv_safe(doc.get("name", "")),
+            _csv_safe(doc.get("email", "")),
+            _csv_safe(doc.get("phone", "")),
+            _csv_safe(doc.get("interested_course", "")),
             doc.get("lead_score", 0),
-            doc.get("lead_category", "Cold"),
+            _csv_safe(doc.get("lead_category", "Cold")),
             bant.get("total", ""),
-            doc.get("sentiment", "Neutral"),
+            _csv_safe(doc.get("sentiment", "Neutral")),
             bool(doc.get("do_not_call", False)),
             doc["created_at"].isoformat() if isinstance(doc.get("created_at"), datetime) else str(doc.get("created_at", "")),
         ])

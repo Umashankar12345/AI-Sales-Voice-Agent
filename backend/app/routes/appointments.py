@@ -69,6 +69,14 @@ async def book_appointment(req: BookAppointmentRequest):
     if not db.connected or db.db is None:
         raise HTTPException(status_code=500, detail="Database not available")
 
+    # Reject past appointment dates
+    try:
+        parsed_date = datetime.strptime(req.slot_date, "%Y-%m-%d").date()
+        if parsed_date < datetime.utcnow().date():
+            raise HTTPException(status_code=422, detail="Cannot book an appointment in the past.")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid slot_date format. Use YYYY-MM-DD.")
+
     # 1. Prevent duplicate bookings
     existing = db.db.appointments.find_one({
         "slot_date": req.slot_date,
@@ -223,3 +231,66 @@ async def export_appointment_ics(appointment_id: str):
         media_type="text/calendar",
         headers={"Content-Disposition": f'attachment; filename="appointment-{appointment_id}.ics"'},
     )
+
+
+class RescheduleRequest(BaseModel):
+    slot_date: str = Field(..., description="YYYY-MM-DD")
+    slot_time: str = Field(..., description="e.g. 10:00 AM")
+
+
+@router.patch("/{appointment_id}/reschedule")
+async def reschedule_appointment(appointment_id: str, req: RescheduleRequest):
+    if not db.connected or db.db is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+    try:
+        parsed_date = datetime.strptime(req.slot_date, "%Y-%m-%d").date()
+        if parsed_date < datetime.utcnow().date():
+            raise HTTPException(status_code=422, detail="Cannot reschedule to a past date.")
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid slot_date format. Use YYYY-MM-DD.")
+
+    try:
+        existing = db.db.appointments.find_one({"_id": ObjectId(appointment_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid appointment id")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    if db.db.appointments.find_one({"slot_date": req.slot_date, "slot_time": req.slot_time}):
+        raise HTTPException(status_code=409, detail=f"Slot {req.slot_date} at {req.slot_time} is already booked.")
+
+    now = datetime.utcnow()
+    # Free old slot, claim new slot, update appointment
+    db.db.slots.update_one(
+        {"slot_date": existing["slot_date"], "slot_time": existing["slot_time"]},
+        {"$set": {"is_booked": False, "booked_by": None, "updated_at": now}},
+    )
+    db.db.slots.update_one(
+        {"slot_date": req.slot_date, "slot_time": req.slot_time},
+        {"$set": {"is_booked": True, "booked_by": existing.get("customer_name"), "updated_at": now}},
+    )
+    updated = db.db.appointments.find_one_and_update(
+        {"_id": ObjectId(appointment_id)},
+        {"$set": {"slot_date": req.slot_date, "slot_time": req.slot_time, "status": "Rescheduled", "updated_at": now}},
+        return_document=True,
+    )
+    return {"success": True, "appointment": serialize_doc(updated)}
+
+
+@router.delete("/{appointment_id}")
+async def cancel_appointment(appointment_id: str):
+    if not db.connected or db.db is None:
+        raise HTTPException(status_code=500, detail="Database not available")
+    try:
+        existing = db.db.appointments.find_one({"_id": ObjectId(appointment_id)})
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid appointment id")
+    if not existing:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    db.db.appointments.delete_one({"_id": ObjectId(appointment_id)})
+    db.db.slots.update_one(
+        {"slot_date": existing["slot_date"], "slot_time": existing["slot_time"]},
+        {"$set": {"is_booked": False, "booked_by": None, "updated_at": datetime.utcnow()}},
+    )
+    return {"success": True, "message": "Appointment cancelled and slot freed."}

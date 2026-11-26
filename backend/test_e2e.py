@@ -64,7 +64,7 @@ def test_full_workflow():
         lead = turn2["lead"]
         assert lead["name"] == "Vikram Malhotra" or "Vikram" in str(lead["name"]), f"Name extraction failed: {lead}"
         assert lead["email"] == "vikram.m@gmail.com", f"Email extraction failed: {lead}"
-        assert "9876543210" in lead["phone"], f"Phone extraction failed: {lead}"
+        assert "9876543210" in lead["phone"].replace(" ", ""), f"Phone extraction failed: {lead}"
         assert turn2["lead_score"] >= 70, f"Lead should qualify as Hot (score >= 70): {turn2['lead_score']}"
         assert turn2["lead_category"] == "Hot", f"Lead category should be Hot: {turn2['lead_category']}"
         print(f"[PASS] 6. Agent Turn 2 Lead Qualification: Name='{lead['name']}', Email='{lead['email']}', Phone='{lead['phone']}', Score={turn2['lead_score']}, Category='{turn2['lead_category']}', Sentiment='{turn2['sentiment']}'.")

@@ -23,12 +23,19 @@ class RAGPipeline:
         try:
             logger.info("Initializing RAG Knowledge Base...")
             self.chunks = self._chunk_knowledge_base(kb_path)
+            for c in self.chunks:
+                c.setdefault("org_id", "public")
+
+            # Reload persisted org-uploaded documents from MongoDB if available
+            from app.database import db
+            if db.connected and db.db is not None:
+                for doc in db.db.kb_documents.find():
+                    for ch in doc.get("chunks", []):
+                        ch["id"] = len(self.chunks)
+                        self.chunks.append(ch)
+
             logger.info(f"Generated {len(self.chunks)} knowledge chunks from {kb_path.name}")
-            
-            # Load sentence transformer model
             self._load_embedder()
-            
-            # Build FAISS index
             self._build_index()
             self.is_ready = True
             logger.info("RAG Pipeline and FAISS index successfully built and ready.")
@@ -145,14 +152,15 @@ class RAGPipeline:
         except Exception as e:
             logger.error(f"Fallback init error: {e}")
 
-    def search(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int = 3, org_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        Retrieves top_k most relevant chunks using FAISS cosine similarity.
+        Retrieves top_k most relevant chunks using FAISS cosine similarity, scoped to org_id + public.
         """
         if not self.chunks:
             return []
 
-        top_k = min(top_k, len(self.chunks))
+        allowed_orgs = {"public", org_id or "org_default"}
+        search_k = min(len(self.chunks), max(top_k * 4, 15))
 
         # If FAISS index is active
         if self.faiss_index is not None:
@@ -165,15 +173,20 @@ class RAGPipeline:
                     faiss.normalize_L2(vec)
                     query_vec = vec
 
-                distances, indices = self.faiss_index.search(query_vec.astype(np.float32), top_k)
+                distances, indices = self.faiss_index.search(query_vec.astype(np.float32), search_k)
                 
                 results = []
                 for score, idx in zip(distances[0], indices[0]):
                     if idx < 0 or idx >= len(self.chunks):
                         continue
-                    chunk = self.chunks[idx].copy()
-                    chunk["score"] = round(float(score), 4)
-                    results.append(chunk)
+                    chunk = self.chunks[idx]
+                    if chunk.get("org_id", "public") not in allowed_orgs:
+                        continue
+                    c_copy = chunk.copy()
+                    c_copy["score"] = round(float(score), 4)
+                    results.append(c_copy)
+                    if len(results) >= top_k:
+                        break
                 return results
             except Exception as e:
                 logger.error(f"Error in FAISS search ({e}). Falling back to keyword search.")
@@ -197,14 +210,23 @@ class RAGPipeline:
     def get_all_chunks(self) -> List[Dict[str, Any]]:
         return self.chunks
 
-    def add_document(self, source_name: str, text: str, chunk_size: int = 600, overlap: int = 100) -> int:
+    def add_document(self, source_name: str, text: str, org_id: str = "org_default", chunk_size: int = 600, overlap: int = 100) -> int:
         """
-        Cleans, chunks with overlap, and indexes a newly uploaded document into FAISS live.
-        Returns number of chunks added.
+        Cleans, chunks with overlap, persists to MongoDB, and indexes a newly uploaded document into FAISS live.
+        Returns number of chunks added, or -1 if duplicate.
         """
+        import hashlib
+        from datetime import datetime
+        from app.database import db
+
         clean = re.sub(r'\s+', ' ', text).strip()
         if not clean:
             return 0
+
+        doc_hash = hashlib.sha256(clean.encode("utf-8")).hexdigest()
+        if db.connected and db.db is not None:
+            if db.db.kb_documents.find_one({"org_id": org_id, "doc_hash": doc_hash}):
+                return -1
 
         new_chunks = []
         start_id = len(self.chunks)
@@ -215,6 +237,7 @@ class RAGPipeline:
             if len(piece) > 20:
                 new_chunks.append({
                     "id": start_id + len(new_chunks),
+                    "org_id": org_id,
                     "course": source_name,
                     "content": piece,
                     "preview": piece[:160] + ("..." if len(piece) > 160 else "")
@@ -224,9 +247,35 @@ class RAGPipeline:
         if not new_chunks:
             return 0
 
+        if db.connected and db.db is not None:
+            db.db.kb_documents.insert_one({
+                "org_id": org_id,
+                "source_name": source_name,
+                "doc_hash": doc_hash,
+                "chunks": new_chunks,
+                "created_at": datetime.utcnow(),
+            })
+
         self.chunks.extend(new_chunks)
         self._build_index()
         self.is_ready = True
         return len(new_chunks)
+
+    def delete_document(self, source_name: str, org_id: str = "org_default") -> int:
+        """Delete an uploaded document's chunks for an org and rebuild the FAISS index."""
+        from app.database import db
+
+        before = len(self.chunks)
+        self.chunks = [c for c in self.chunks if not (c.get("course") == source_name and c.get("org_id") == org_id)]
+        removed = before - len(self.chunks)
+        for i, c in enumerate(self.chunks):
+            c["id"] = i
+
+        if db.connected and db.db is not None:
+            db.db.kb_documents.delete_many({"org_id": org_id, "source_name": source_name})
+
+        if removed > 0:
+            self._build_index()
+        return removed
 
 rag_service = RAGPipeline()
