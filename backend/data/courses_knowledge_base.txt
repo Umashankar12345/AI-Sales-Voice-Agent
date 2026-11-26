@@ -1,0 +1,163 @@
+# ==============================================================================
+# VOXSALES ACADEMY - OFFICIAL COURSE CATALOG & KNOWLEDGE BASE
+# ==============================================================================
+
+[SECTION: COMPANY OVERVIEW]
+VoxSales Academy (by Fortivex Education) is a premier tech education platform focused on bridging the industry-academia gap. We provide industry-aligned cohort-based live training, personalized mentorship, guaranteed interview calls, 1-on-1 placement guidance, and real-world capstone projects.
+Key Offerings:
+- Flexible batch timings (Morning, Evening, Weekend).
+- 1:1 Doubt clearing sessions with senior MAANG/Product company mentors.
+- 100% placement assistance guarantee with 350+ hiring partners.
+- Hands-on GitHub portfolio building, mock interviews, and resume refinement.
+- Dedicated career counseling and free counseling appointments.
+
+------------------------------------------------------------------------------
+
+[SECTION: COURSE 1 - PYTHON PROGRAMMING & AUTOMATION BOOTCAMP]
+Course Title: Complete Python Programming, Automation & Data Engineering
+Target Audience: Beginners, college students, software testers, and professionals looking to transition to backend or data roles.
+Prerequisites: No prior coding experience required. Basic computer literacy is sufficient.
+Duration: 12 Weeks (3 Months), 6-8 hours/week commitment.
+Batch Schedule:
+- Weekday Cohort: Monday to Thursday, 7:30 PM - 9:00 PM IST
+- Weekend Cohort: Saturday & Sunday, 10:00 AM - 1:00 PM IST
+Curriculum Breakdown:
+- Phase 1: Python Basics (Data types, control structures, loops, functions, OOP concepts, exceptions).
+- Phase 2: Advanced Python (Generators, decorators, context managers, multithreading, asyncio).
+- Phase 3: Practical Libraries (NumPy, Pandas, Matplotlib, Requests, BeautifulSoup, Selenium).
+- Phase 4: Database Integration & Web Scraping (PostgreSQL, SQLite, automated scrapers).
+- Phase 5: REST APIs & Micro-frameworks (FastAPI, Flask, automated testing with PyTest).
+Capstone Projects:
+1. Automated Multi-Platform E-commerce Price Tracker with Email Alerts.
+2. High-Performance ETL Pipeline processing financial stock market tick data.
+Pricing & Fees:
+- Regular Fee: INR 4,999 (One-time payment).
+- Early Bird / College Placement Discount: INR 3,499 (Save 30%).
+- No-Cost EMI: 3-month EMI at INR 1,166/month, or 6-month EMI at INR 583/month.
+Career Support & Outcomes:
+- Junior Python Developer, Automation Engineer, Data Operations Analyst.
+- Average starting CTC: 5.5 LPA - 8.5 LPA.
+
+------------------------------------------------------------------------------
+
+[SECTION: COURSE 2 - JAVA ENTERPRISE & MICROSERVICES MASTERCLASS]
+Course Title: Java Enterprise, Spring Boot & Distributed Microservices
+Target Audience: CS/IT students, junior backend developers, and engineers aiming for tier-1 IT services and product MNCs.
+Prerequisites: Basic understanding of programming fundamentals in C, C++, or Java.
+Duration: 16 Weeks (4 Months), 8 hours/week commitment.
+Batch Schedule:
+- Weekday Cohort: Monday to Thursday, 8:00 PM - 9:30 PM IST
+- Weekend Cohort: Saturday & Sunday, 2:00 PM - 5:00 PM IST
+Curriculum Breakdown:
+- Phase 1: Core Java 21 Deep Dive (Memory management, JVM internals, Collections Framework, Streams API, Concurrency & Virtual Threads).
+- Phase 2: Spring Boot 3 Core (Dependency Injection, AOP, Spring Data JPA, Hibernate, Flyway migrations).
+- Phase 3: Microservices Architecture (Spring Cloud, Eureka Discovery, API Gateway, Resilience4j Circuit Breakers).
+- Phase 4: Messaging & Distributed Caching (Apache Kafka, Redis, RabbitMQ).
+- Phase 5: Containerization & Cloud CI/CD (Docker, Kubernetes basics, GitHub Actions, AWS ECS deployment).
+Capstone Projects:
+1. Distributed Banking & Wallet Microservices System with ACID compliance and Kafka event sourcing.
+2. Scalable E-Commerce Backend with Redis distributed lock and Stripe payment gateway.
+Pricing & Fees:
+- Regular Fee: INR 5,499.
+- Early Bird / Placement Offer: INR 3,999.
+- No-Cost EMI: 3-month EMI at INR 1,333/month, or 6-month EMI at INR 666/month.
+Career Support & Outcomes:
+- Java Backend Engineer, Software Development Engineer (SDE-1), Enterprise Java Consultant.
+- Average starting CTC: 6.5 LPA - 12 LPA.
+
+------------------------------------------------------------------------------
+
+[SECTION: COURSE 3 - FULL STACK WEB DEVELOPMENT (MERN + NEXT.JS)]
+Course Title: Modern Full Stack Web Development (MERN, Next.js 14, TypeScript & Tailwind)
+Target Audience: Aspiring web developers, final-year college students, and tech enthusiasts who want to build production SaaS web apps.
+Prerequisites: Basic computer logic; HTML/CSS familiarity is helpful but covered in pre-work.
+Duration: 18 Weeks (4.5 Months), 10 hours/week commitment.
+Batch Schedule:
+- Weekday Cohort: Monday, Wednesday, Friday, 7:00 PM - 9:00 PM IST
+- Weekend Cohort: Saturday & Sunday, 9:30 AM - 1:30 PM IST
+Curriculum Breakdown:
+- Phase 1: Advanced Frontend & TypeScript (HTML5, Modern CSS, Tailwind CSS, TypeScript fundamentals, React 18/19, Hooks, Redux Toolkit, React Query).
+- Phase 2: Modern Server-Side React with Next.js 14 (App Router, Server Components, Server Actions, SEO, Auth.js).
+- Phase 3: Backend & APIs (Node.js runtime, Express.js, REST & GraphQL APIs, JWT & OAuth2 authentication).
+- Phase 4: Databases (MongoDB with Mongoose, PostgreSQL with Prisma ORM, Vector DB basics).
+- Phase 5: DevOps & Deployment (Docker, Vercel, AWS S3 file storage, CI/CD pipeline, monitoring).
+Capstone Projects:
+1. Production B2B SaaS Collaboration Tool with real-time WebSockets, Kanban boards, and billing.
+2. AI-Powered Course Recommendation & Analytics Platform.
+Pricing & Fees:
+- Regular Fee: INR 5,999.
+- Early Bird / Placement Special: INR 4,499.
+- No-Cost EMI: 3-month EMI at INR 1,500/month, or 6-month EMI at INR 750/month.
+Career Support & Outcomes:
+- Full Stack Developer, Frontend Engineer, React/Node.js Developer.
+- Average starting CTC: 6.0 LPA - 14 LPA.
+
+------------------------------------------------------------------------------
+
+[SECTION: COURSE 4 - ARTIFICIAL INTELLIGENCE, MACHINE LEARNING & LLM SPECIALIST]
+Course Title: Applied AI, Machine Learning, Deep Learning & Generative AI Specialist
+Target Audience: Software engineers, data analysts, math/stats graduates, and students aiming to break into AI engineering.
+Prerequisites: Basic Python knowledge and fundamental high-school linear algebra/calculus.
+Duration: 20 Weeks (5 Months), 10-12 hours/week commitment.
+Batch Schedule:
+- Weekday Cohort: Tuesday, Thursday, Friday, 8:00 PM - 10:00 PM IST
+- Weekend Cohort: Saturday & Sunday, 3:00 PM - 7:00 PM IST
+Curriculum Breakdown:
+- Phase 1: Foundations of Math & Data Science (Linear Algebra, Calculus, Statistics, NumPy, Pandas, Scikit-learn).
+- Phase 2: Classical Machine Learning (Supervised/Unsupervised algorithms, Feature engineering, Model evaluation, XGBoost).
+- Phase 3: Deep Learning with PyTorch (Neural networks, CNNs for computer vision, RNNs/Transformers for NLP).
+- Phase 4: Generative AI & Large Language Models (LLM APIs, Prompt Engineering, RAG with FAISS/Pinecone, LangChain, LlamaIndex).
+- Phase 5: Production AI & MLOps (Model serving with FastAPI, Docker, ONNX Runtime, MLflow model tracking).
+Capstone Projects:
+1. Enterprise Multi-Modal Document RAG Agent answering medical and legal queries with cited sources.
+2. Real-time Defect Detection & Image Segmentation system using PyTorch and OpenCV.
+Pricing & Fees:
+- Regular Fee: INR 6,999.
+- Early Bird / Placement Discount: INR 4,999.
+- No-Cost EMI: 3-month EMI at INR 1,666/month, or 6-month EMI at INR 833/month.
+Career Support & Outcomes:
+- AI Engineer, Machine Learning Developer, Data Scientist, GenAI Solutions Architect.
+- Average starting CTC: 8 LPA - 18 LPA.
+
+------------------------------------------------------------------------------
+
+[SECTION: COURSE 5 - DATA STRUCTURES & ALGORITHMS (DSA) & SYSTEM DESIGN MASTERCLASS]
+Course Title: Data Structures, Algorithms & Low-Level / High-Level System Design for Placements
+Target Audience: Final and pre-final year engineering students targeting FAANG/MAANG, tier-1 tech startups, and high-paying SDE placements.
+Prerequisites: Proficiency in at least one language: C++, Java, or Python.
+Duration: 14 Weeks (3.5 Months), 8 hours/week commitment.
+Batch Schedule:
+- Weekday Cohort: Monday to Thursday, 9:00 PM - 10:30 PM IST
+- Weekend Cohort: Saturday & Sunday, 10:00 AM - 1:00 PM IST
+Curriculum Breakdown:
+- Phase 1: Core Algorithms (Time & Space Complexity, Two Pointers, Sliding Window, Binary Search, Recursion & Backtracking).
+- Phase 2: Core Data Structures (Linked Lists, Stacks, Queues, Trees, Binary Search Trees, Heaps/Priority Queues, Hashing).
+- Phase 3: Advanced DSA (Graphs - BFS, DFS, Dijkstra, Bellman-Ford, Disjoint Set Union; Dynamic Programming 1D/2D).
+- Phase 4: 300+ Curated LeetCode Medium/Hard Problem Solving & Pattern Recognition.
+- Phase 5: System Design Essentials (Low-Level Design OOP patterns, SOLID principles, High-Level Design: Load Balancers, Caching, Sharding, CAP Theorem).
+Capstone Projects:
+1. Design & Implement a Distributed Rate Limiter and URL Shortener (System Design Project).
+2. Competitive Programming & LeetCode Milestone Achievement (Target 300+ solved problems).
+Pricing & Fees:
+- Regular Fee: INR 4,499.
+- Early Bird / Placement Discount: INR 3,299.
+- No-Cost EMI: 3-month EMI at INR 1,100/month, or 6-month EMI at INR 550/month.
+Career Support & Outcomes:
+- SDE-1, Software Engineer at Tier-1 companies (Amazon, Microsoft, Flipkart, Swiggy, Zomato, Oracle).
+- Average starting CTC: 9 LPA - 24 LPA.
+
+------------------------------------------------------------------------------
+
+[SECTION: ADMISSIONS, SCHOLARSHIP & APPOINTMENT POLICIES]
+1. Free 1-on-1 Academic & Career Counseling:
+   - Prospective students can book a free 30-minute counseling slot with our senior academic advisors.
+   - We assess candidate background, career goals, and recommend the best-suited course and study timeline.
+2. Available Slot Windows:
+   - Slots are available Monday through Saturday.
+   - Standard Slots: 10:00 AM, 11:30 AM, 2:00 PM, 3:30 PM, 5:00 PM, 6:30 PM.
+   - Immediate confirmation with email/SMS calendar invite upon booking.
+3. Scholarship & Placement Guarantee:
+   - Need-based and merit-based scholarships up to 25% off are available through our aptitude evaluation.
+   - 100% placement support includes resume review, LinkedIn optimization, 5 mock technical interviews, and unlimited job referrals until placement.
+4. Refund & Cancellation Policy:
+   - 7-day no-questions-asked 100% refund policy from the batch commencement date.
