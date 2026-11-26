@@ -20,6 +20,11 @@ class Settings:
     PORT: int = int(os.getenv("PORT", "8000"))
     HOST: int = int(os.getenv("PORT", "8000")) if False else os.getenv("HOST", "127.0.0.1")
     ADMIN_SECRET_KEY: str = os.getenv("ADMIN_SECRET_KEY", "voxsales_admin_secret_2026")
+    RAG_MIN_SIMILARITY: float = float(os.getenv("RAG_MIN_SIMILARITY", "0.22"))
+    ALLOW_UNAUTH_DEMO: bool = os.getenv("ALLOW_UNAUTH_DEMO", "true").lower() == "true"
+    GOOGLE_CALENDAR_CLIENT_ID: str = os.getenv("GOOGLE_CALENDAR_CLIENT_ID", "").strip()
+    GOOGLE_CALENDAR_CLIENT_SECRET: str = os.getenv("GOOGLE_CALENDAR_CLIENT_SECRET", "").strip()
+    GOOGLE_CALENDAR_REFRESH_TOKEN: str = os.getenv("GOOGLE_CALENDAR_REFRESH_TOKEN", "").strip()
     KB_FILE_PATH: Path = BASE_DIR / "data" / "courses_knowledge_base.txt"
     FAISS_INDEX_PATH: Path = BASE_DIR / "data" / "faiss_index.bin"
     CHUNKS_FILE_PATH: Path = BASE_DIR / "data" / "kb_chunks.json"

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 
 from app.auth import CurrentUser, get_optional_user
+from app.config import settings
 from app.database import db
 from app.lead_scorer import calculate_lead_score
 
@@ -297,3 +298,18 @@ async def cancel_appointment(appointment_id: str):
         {"$set": {"is_booked": False, "booked_by": None, "updated_at": datetime.utcnow()}},
     )
     return {"success": True, "message": "Appointment cancelled and slot freed."}
+
+
+@router.get("/google-calendar/status")
+async def google_calendar_status():
+    """Honest status check for live Google Calendar OAuth integration."""
+    connected = bool(
+        settings.GOOGLE_CALENDAR_CLIENT_ID
+        and settings.GOOGLE_CALENDAR_CLIENT_SECRET
+        and settings.GOOGLE_CALENDAR_REFRESH_TOKEN
+    )
+    return {
+        "connected": connected,
+        "ics_export_available": True,
+        "message": "Google Calendar OAuth is connected." if connected else "Google Calendar OAuth is not connected (missing GOOGLE_CALENDAR_CLIENT_ID/SECRET/REFRESH_TOKEN). Standard .ics export is available.",
+    }

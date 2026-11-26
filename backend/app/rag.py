@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import numpy as np
+from app.config import settings
 
 logger = logging.getLogger("voxsales.rag")
 
@@ -179,7 +180,7 @@ class RAGPipeline:
                 for score, idx in zip(distances[0], indices[0]):
                     if idx < 0 or idx >= len(self.chunks):
                         continue
-                    if float(score) < 0.22:
+                    if float(score) < settings.RAG_MIN_SIMILARITY:
                         continue
                     chunk = self.chunks[idx]
                     if chunk.get("org_id", "public") not in allowed_orgs:

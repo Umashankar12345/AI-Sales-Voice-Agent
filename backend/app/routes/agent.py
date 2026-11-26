@@ -360,6 +360,10 @@ async def interact(req: InteractRequest, current: Optional[CurrentUser] = Depend
     return {
         "session_id": session_id,
         "reply": ai_reply,
+        "is_fallback": ai_result.get("is_fallback", False),
+        "provider": ai_result.get("provider", "fallback"),
+        "model": ai_result.get("model"),
+        "ai_error": ai_result.get("error"),
         "sentiment": sentiment,
         "booking_intent": booking_intent,
         "lead_score": lead_score,

@@ -106,3 +106,22 @@ def format_memory_context(
     for mem in memories:
         lines.append(f"- [{mem['category']}] {mem['content']}")
     return "\n".join(lines)
+
+
+def update_lead_memory(memory_id: str, content: str, org_id: str) -> bool:
+    from bson import ObjectId
+    if not db.connected or db.db is None or not content.strip():
+        return False
+    res = db.db.lead_memories.update_one(
+        {"_id": ObjectId(memory_id), "org_id": org_id},
+        {"$set": {"content": content.strip(), "updated_at": datetime.utcnow()}},
+    )
+    return res.matched_count > 0
+
+
+def delete_lead_memory(memory_id: str, org_id: str) -> bool:
+    from bson import ObjectId
+    if not db.connected or db.db is None:
+        return False
+    res = db.db.lead_memories.delete_one({"_id": ObjectId(memory_id), "org_id": org_id})
+    return res.deleted_count > 0

@@ -1,5 +1,58 @@
 const API_BASE = '/api';
 
+export function getAuthToken() {
+  return localStorage.getItem('voxsales_jwt') || '';
+}
+
+export function setAuthToken(token) {
+  if (token) {
+    localStorage.setItem('voxsales_jwt', token);
+  } else {
+    localStorage.removeItem('voxsales_jwt');
+  }
+}
+
+export function authHeaders(extra = {}) {
+  const token = getAuthToken();
+  return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+}
+
+export async function registerUser(payload) {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Registration failed');
+  setAuthToken(data.access_token);
+  return data;
+}
+
+export async function loginUser(email, password) {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Login failed');
+  setAuthToken(data.access_token);
+  return data;
+}
+
+export async function getCurrentUser() {
+  const token = getAuthToken();
+  if (!token) return null;
+  const res = await fetch(`${API_BASE}/auth/me`, { headers: authHeaders() });
+  if (res.status === 401) {
+    setAuthToken('');
+    return null;
+  }
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function getDashboardStats() {
   const res = await fetch(`${API_BASE}/dashboard/stats`);
   if (!res.ok) throw new Error('Failed to fetch dashboard stats');

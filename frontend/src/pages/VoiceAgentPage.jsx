@@ -32,7 +32,7 @@ import {
   CheckCircle2,
   Lock
 } from 'lucide-react';
-import { interactWithAgent, getSettingsStatus, registerCandidate } from '../api';
+import { interactWithAgent, getSettingsStatus, registerCandidate, sendDeepgramVoiceTurn, getLiveKitToken } from '../api';
 
 export default function VoiceAgentPage({ onOpenBookingWithData, onOpenApiKeyModal }) {
   const [sessionId, setSessionId] = useState('');
@@ -47,6 +47,9 @@ export default function VoiceAgentPage({ onOpenBookingWithData, onOpenApiKeyModa
   const [consultationStatus, setConsultationStatus] = useState('Idle'); // 'Idle', 'In Consultation'
   const [micError, setMicError] = useState(null);
   const [engineStatus, setEngineStatus] = useState(null);
+  const [voiceMode, setVoiceMode] = useState('browser'); // 'browser' | 'deepgram' | 'livekit'
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   // Candidate Registration & Profile State
   const [candidateInfo, setCandidateInfo] = useState({
@@ -341,9 +344,68 @@ export default function VoiceAgentPage({ onOpenBookingWithData, onOpenApiKeyModa
     setLiveTranscript('');
   };
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (isSpeaking) {
       stopAudio();
+    }
+
+    if (voiceMode === 'deepgram') {
+      if (isListening && mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+        setIsListening(false);
+        return;
+      }
+      try {
+        setConsultationStatus('In Consultation');
+        setMicError(null);
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const recorder = new MediaRecorder(stream);
+        audioChunksRef.current = [];
+        recorder.ondataavailable = (ev) => {
+          if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
+        };
+        recorder.onstop = async () => {
+          stream.getTracks().forEach((t) => t.stop());
+          const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          const fd = new FormData();
+          fd.append('audio', blob, 'turn.webm');
+          fd.append('session_id', sessionId);
+          fd.append('language', selectedLanguage);
+          if (candidateInfoRef.current?.name) fd.append('candidate_name', candidateInfoRef.current.name);
+          if (candidateInfoRef.current?.email) fd.append('candidate_email', candidateInfoRef.current.email);
+          if (candidateInfoRef.current?.phone) fd.append('candidate_phone', candidateInfoRef.current.phone);
+          try {
+            setIsLoading(true);
+            const data = await sendDeepgramVoiceTurn(fd);
+            if (!data.user_text) {
+              setMicError(data.audio_error || 'No speech detected by Deepgram.');
+              return;
+            }
+            setMessages((prev) => [
+              ...prev,
+              { role: 'user', content: data.user_text, mode: 'deepgram', timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+              { role: 'assistant', content: data.reply, sentiment: data.sentiment, provider: data.provider || 'fallback', is_fallback: Boolean(data.is_fallback), timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
+            ]);
+            if (data.audio_base64 && autoSpeak) {
+              const audio = new Audio(`data:${data.audio_content_type || 'audio/mpeg'};base64,${data.audio_base64}`);
+              audio.onplay = () => setIsSpeaking(true);
+              audio.onended = () => setIsSpeaking(false);
+              audio.play().catch(() => {});
+            }
+          } catch (err) {
+            setMicError(err.message || 'Deepgram voice turn failed.');
+          } finally {
+            setIsLoading(false);
+          }
+        };
+        mediaRecorderRef.current = recorder;
+        recorder.start();
+        setIsListening(true);
+      } catch (err) {
+        setMicError(err.message || 'Microphone access denied.');
+        setIsListening(false);
+      }
+      return;
     }
 
     if (!recognitionRef.current) {
@@ -502,6 +564,8 @@ export default function VoiceAgentPage({ onOpenBookingWithData, onOpenApiKeyModa
         role: 'assistant',
         content: data.reply,
         sentiment: data.sentiment,
+        provider: data.provider || 'fallback',
+        is_fallback: Boolean(data.is_fallback),
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
 
@@ -630,6 +694,30 @@ export default function VoiceAgentPage({ onOpenBookingWithData, onOpenApiKeyModa
           {/* Status Pills & Audio Controls Header */}
           <div className="p-4 border-b border-slate-100 bg-slate-50/70 flex flex-wrap items-center justify-between gap-3 shrink-0">
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Voice Engine Mode Selector */}
+              <select
+                value={voiceMode}
+                onChange={async (e) => {
+                  const nextMode = e.target.value;
+                  setVoiceMode(nextMode);
+                  setMicError(null);
+                  if (nextMode === 'livekit') {
+                    try {
+                      const lk = await getLiveKitToken(sessionId, candidateInfo.name || 'prospect');
+                      setMicError(`LiveKit room token minted (${lk.room_name}). Ensure voice-agent/agent.py worker is running to join room.`);
+                    } catch (err) {
+                      setMicError(err.message);
+                    }
+                  }
+                }}
+                className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white border border-slate-200 text-slate-700 outline-none cursor-pointer"
+                title="Select Voice Pipeline"
+              >
+                <option value="browser">Voice: Web Speech API</option>
+                <option value="deepgram">Voice: Deepgram STT+TTS</option>
+                <option value="livekit">Voice: LiveKit Room</option>
+              </select>
+
               {/* Status Badge */}
               <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 ${
                 consultationStatus === 'Idle' 
@@ -749,10 +837,17 @@ export default function VoiceAgentPage({ onOpenBookingWithData, onOpenApiKeyModa
                     <div className={`flex items-center justify-between gap-4 border-b pb-1.5 mb-1.5 ${
                       msg.role === 'user' ? 'border-slate-700/60' : 'border-slate-100'
                     }`}>
-                      <span className={`font-bold text-[11px] ${
+                      <span className={`font-bold text-[11px] flex items-center gap-2 ${
                         msg.role === 'user' ? 'text-cyan-300' : 'text-cyan-700'
                       }`}>
-                        {msg.role === 'user' ? (candidateInfo.name || 'Candidate') : 'VoxSales (AI Counselor)'}
+                        <span>{msg.role === 'user' ? (candidateInfo.name || 'Candidate') : 'VoxSales (AI Counselor)'}</span>
+                        {msg.role === 'assistant' && msg.provider && (
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                            msg.is_fallback ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {msg.is_fallback ? 'Fallback' : msg.provider}
+                          </span>
+                        )}
                       </span>
                       <span className={`text-[10px] font-mono ${
                         msg.role === 'user' ? 'text-slate-300' : 'text-slate-400'

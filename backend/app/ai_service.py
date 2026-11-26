@@ -122,52 +122,75 @@ class AIService:
         lower_msg = user_message.lower()
         booking_intent = any(word in lower_msg for word in ["book", "appointment", "counseling", "slot", "schedule", "call", "meet", "demo"])
 
-        # 1. Try Groq LPU First (Ultra-fast ~300ms)
-        if self.groq_client:
-            try:
-                future = _ai_executor.submit(
-                    self._call_groq,
-                    user_message,
-                    conversation_history,
-                    context_text,
-                    heuristic_lead,
-                    heuristic_sentiment,
-                    booking_intent,
-                    language
-                )
-                res = future.result(timeout=3.5)
-                res["is_fallback"] = False
-                res["provider_used"] = "groq"
-                return res
-            except Exception as e:
-                logger.warning(f"Groq API error ({e}). Attempting secondary model fallback...")
+        # 1. Try Groq LPU First (Ultra-fast ~300ms) with bounded transient retry
+        import uuid as _uuid
+        import time as _time
+        req_id = _uuid.uuid4().hex[:8]
+        last_error = None
 
-        # 2. Try Gemini API Second
+        if self.groq_client:
+            for attempt in range(2):
+                try:
+                    future = _ai_executor.submit(
+                        self._call_groq,
+                        user_message,
+                        conversation_history,
+                        context_text,
+                        heuristic_lead,
+                        heuristic_sentiment,
+                        booking_intent,
+                        language
+                    )
+                    res = future.result(timeout=4.0)
+                    res["is_fallback"] = False
+                    res["provider"] = "groq"
+                    res["provider_used"] = "groq"
+                    res["model"] = "qwen/qwen3.8-27b"
+                    res["request_id"] = req_id
+                    return res
+                except Exception as e:
+                    last_error = f"groq: {type(e).__name__}"
+                    logger.warning(f"[{req_id}] Groq attempt {attempt+1} failed: {e}")
+                    if any(code in str(e) for code in ("401", "403", "404")):
+                        break
+                    _time.sleep(0.25 * (attempt + 1))
+
+        # 2. Try Gemini API Second with bounded transient retry
         if self.client:
-            try:
-                future = _ai_executor.submit(
-                    self._call_gemini,
-                    user_message,
-                    conversation_history,
-                    context_text,
-                    heuristic_lead,
-                    heuristic_sentiment,
-                    booking_intent,
-                    language
-                )
-                res = future.result(timeout=4.0)
-                res["is_fallback"] = False
-                res["provider_used"] = "gemini"
-                return res
-            except concurrent.futures.TimeoutError:
-                logger.warning("Gemini API exceeded 4.0s limit. Switching to contextual counselor engine.")
-            except Exception as e:
-                logger.warning(f"Gemini API call failed ({e}). Switching to contextual counselor engine.")
+            for attempt in range(2):
+                try:
+                    future = _ai_executor.submit(
+                        self._call_gemini,
+                        user_message,
+                        conversation_history,
+                        context_text,
+                        heuristic_lead,
+                        heuristic_sentiment,
+                        booking_intent,
+                        language
+                    )
+                    res = future.result(timeout=4.5)
+                    res["is_fallback"] = False
+                    res["provider"] = "gemini"
+                    res["provider_used"] = "gemini"
+                    res["model"] = "gemini-3.8-flash"
+                    res["request_id"] = req_id
+                    return res
+                except Exception as e:
+                    last_error = f"gemini: {type(e).__name__}"
+                    logger.warning(f"[{req_id}] Gemini attempt {attempt+1} failed: {e}")
+                    if any(code in str(e) for code in ("401", "403", "404")):
+                        break
+                    _time.sleep(0.25 * (attempt + 1))
 
         # 3. Rule-based Intelligent Counselor Fallback
         res = self._generate_intelligent_fallback(user_message, conversation_history, cleaned_chunks, heuristic_lead, heuristic_sentiment, booking_intent, language)
         res["is_fallback"] = True
+        res["provider"] = "fallback"
         res["provider_used"] = "deterministic_fallback"
+        res["model"] = "deterministic-counselor-v1"
+        res["error"] = last_error or "No LLM API key configured"
+        res["request_id"] = req_id
         return res
 
     def _call_groq(

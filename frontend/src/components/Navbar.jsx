@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Mic, Calendar, Key, ShieldCheck, Sparkles } from 'lucide-react';
-import { getSettingsStatus } from '../api';
+import { Mic, Calendar, Key, ShieldCheck, Sparkles, LogIn, LogOut } from 'lucide-react';
+import { getSettingsStatus, getCurrentUser, setAuthToken } from '../api';
 
-export default function Navbar({ activeTab, onStartCall, onBookSlot, onOpenApiKeyModal }) {
+export default function Navbar({ activeTab, onStartCall, onBookSlot, onOpenApiKeyModal, onOpenAuthModal }) {
   const [geminiActive, setGeminiActive] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
     checkKey();
+    getCurrentUser().then(setCurrentUser).catch(() => {});
     const interval = setInterval(checkKey, 10000);
     return () => clearInterval(interval);
   }, []);
@@ -66,6 +68,27 @@ export default function Navbar({ activeTab, onStartCall, onBookSlot, onOpenApiKe
           <Mic className="w-3.5 h-3.5" />
           <span>Launch Voice Call</span>
         </button>
+
+        {currentUser ? (
+          <button
+            onClick={() => { setAuthToken(''); setCurrentUser(null); window.location.reload(); }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
+            title={`Signed in as ${currentUser.email} (${currentUser.role})`}
+          >
+            <LogOut className="w-3.5 h-3.5 text-rose-500" />
+            <span>{currentUser.role === 'admin' ? 'Admin' : 'Member'}</span>
+          </button>
+        ) : (
+          onOpenAuthModal && (
+            <button
+              onClick={onOpenAuthModal}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </button>
+          )
+        )}
       </div>
     </header>
   );

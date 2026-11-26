@@ -12,12 +12,14 @@ import ArchitecturePage from './pages/ArchitecturePage';
 import SettingsPage from './pages/SettingsPage';
 import BookingModal from './components/BookingModal';
 import ApiKeyModal from './components/ApiKeyModal';
+import AuthModal from './components/AuthModal';
 import { checkHealth } from './api';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('agent');
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [isApiKeyOpen, setIsApiKeyOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [bookingPrefill, setBookingPrefill] = useState({});
   const [systemHealth, setSystemHealth] = useState({ online: true, db: true });
 
@@ -59,6 +61,7 @@ export default function App() {
           onStartCall={() => setActiveTab('agent')}
           onBookSlot={() => handleOpenBooking()}
           onOpenApiKeyModal={() => setIsApiKeyOpen(true)}
+          onOpenAuthModal={() => setIsAuthOpen(true)}
         />
 
         <main className="flex-1 flex flex-col overflow-hidden">
@@ -124,6 +127,13 @@ export default function App() {
       <ApiKeyModal
         isOpen={isApiKeyOpen}
         onClose={() => setIsApiKeyOpen(false)}
+      />
+
+      {/* Organization Auth Modal */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onAuthSuccess={() => window.location.reload()}
       />
     </div>
   );

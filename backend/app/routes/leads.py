@@ -174,11 +174,14 @@ async def delete_lead(lead_id: str):
 
 
 @router.get("/{lead_id}/memory")
-async def get_lead_memory_timeline(lead_id: str):
+async def get_lead_memory_timeline(lead_id: str, current: Optional[CurrentUser] = Depends(get_optional_user)):
     if not db.connected or db.db is None:
         return {"memories": []}
     try:
-        doc = db.db.leads.find_one({"_id": ObjectId(lead_id)})
+        q: Dict[str, Any] = {"_id": ObjectId(lead_id)}
+        if current:
+            q["org_id"] = current.org_id
+        doc = db.db.leads.find_one(q)
         if not doc:
             raise HTTPException(status_code=404, detail="Lead not found")
         memories = get_lead_memories(
@@ -186,6 +189,7 @@ async def get_lead_memory_timeline(lead_id: str):
             email=doc.get("email"),
             phone=doc.get("phone"),
             limit=20,
+            org_id=current.org_id if current else None,
         )
         return {"lead_id": lead_id, "memories": memories}
     except HTTPException:
