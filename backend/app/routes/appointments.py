@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 
+from app.auth import CurrentUser, get_optional_user
 from app.database import db
 from app.lead_scorer import calculate_lead_score
 
@@ -43,21 +44,22 @@ async def get_available_slots():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("")
-async def get_appointments():
+async def get_appointments(current: Optional[CurrentUser] = Depends(get_optional_user)):
     """
-    Returns all confirmed bookings.
+    Returns all confirmed bookings, scoped by org_id when authenticated.
     """
     if not db.connected or db.db is None:
         return {"appointments": []}
 
     try:
-        cursor = db.db.appointments.find().sort("created_at", -1)
+        query: Dict[str, Any] = {"org_id": current.org_id} if current else {}
+        cursor = db.db.appointments.find(query).sort("created_at", -1)
         return {"appointments": [serialize_doc(doc) for doc in cursor]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/book")
-async def book_appointment(req: BookAppointmentRequest):
+async def book_appointment(req: BookAppointmentRequest, current: Optional[CurrentUser] = Depends(get_optional_user)):
     """
     Books an appointment slot.
     Guarantees concurrency safety by:
@@ -108,6 +110,7 @@ async def book_appointment(req: BookAppointmentRequest):
 
     # 3. Create appointment record
     appointment_doc = {
+        "org_id": current.org_id if current else "org_default",
         "customer_name": req.customer_name.strip(),
         "email": req.email.strip().lower(),
         "phone": req.phone.strip(),

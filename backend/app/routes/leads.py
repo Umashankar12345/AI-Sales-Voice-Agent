@@ -260,11 +260,13 @@ async def export_leads_csv(current: Optional[CurrentUser] = Depends(get_optional
 
 
 @router.post("/{lead_id}/tasks")
-async def create_followup_task(lead_id: str, task: FollowUpTaskCreate):
+async def create_followup_task(lead_id: str, task: FollowUpTaskCreate, current: Optional[CurrentUser] = Depends(get_optional_user)):
     if not db.connected or db.db is None:
         raise HTTPException(status_code=500, detail="Database not connected")
+    org_id = current.org_id if current else "org_default"
     now = datetime.utcnow()
     doc = {
+        "org_id": org_id,
         "lead_id": lead_id,
         "title": task.title.strip(),
         "due_date": task.due_date,
@@ -273,7 +275,7 @@ async def create_followup_task(lead_id: str, task: FollowUpTaskCreate):
         "created_at": now,
     }
     res = db.db.tasks.insert_one(doc)
-    db.db.audit_logs.insert_one({"action": "task_created", "lead_id": lead_id, "detail": doc["title"], "created_at": now})
+    db.db.audit_logs.insert_one({"org_id": org_id, "action": "task_created", "lead_id": lead_id, "detail": doc["title"], "created_at": now})
     doc["id"] = str(res.inserted_id)
     doc.pop("_id", None)
     doc["created_at"] = now.isoformat()
@@ -281,8 +283,9 @@ async def create_followup_task(lead_id: str, task: FollowUpTaskCreate):
 
 
 @router.get("/tasks/all")
-async def list_followup_tasks(limit: int = 50):
+async def list_followup_tasks(limit: int = 50, current: Optional[CurrentUser] = Depends(get_optional_user)):
     if not db.connected or db.db is None:
         return {"tasks": []}
-    cursor = db.db.tasks.find().sort("created_at", -1).limit(limit)
+    query: Dict[str, Any] = {"org_id": current.org_id} if current else {}
+    cursor = db.db.tasks.find(query).sort("created_at", -1).limit(limit)
     return {"tasks": [serialize_doc(doc) for doc in cursor]}

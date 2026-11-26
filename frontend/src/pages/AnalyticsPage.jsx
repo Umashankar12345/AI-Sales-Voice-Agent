@@ -42,13 +42,15 @@ export default function AnalyticsPage() {
     ? ((totalAppointments / totalLeads) * 100).toFixed(1) 
     : '0.0';
 
-  const courses = [
-    { name: 'Python Programming & Automation', count: 12, pct: 35, color: 'bg-indigo-500' },
-    { name: 'Full Stack Web Development', count: 9, pct: 26, color: 'bg-cyan-500' },
-    { name: 'AI & Machine Learning Specialist', count: 8, pct: 23, color: 'bg-purple-500' },
-    { name: 'Java Enterprise Microservices', count: 4, pct: 11, color: 'bg-amber-500' },
-    { name: 'DSA & System Design Masterclass', count: 2, pct: 5, color: 'bg-emerald-500' }
-  ];
+  const palette = ['bg-indigo-500', 'bg-cyan-500', 'bg-purple-500', 'bg-amber-500', 'bg-emerald-500'];
+  const rawDist = stats?.course_distribution || [];
+  const distTotal = rawDist.reduce((acc, item) => acc + (item.count || 0), 0);
+  const courses = rawDist.map((item, idx) => ({
+    name: item.course || 'General',
+    count: item.count || 0,
+    pct: distTotal > 0 ? Math.round(((item.count || 0) / distTotal) * 100) : 0,
+    color: palette[idx % palette.length],
+  }));
 
   return (
     <div className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6 overflow-y-auto">
@@ -179,7 +181,9 @@ export default function AnalyticsPage() {
           </h3>
 
           <div className="space-y-3 pt-2">
-            {courses.map((c, idx) => (
+            {courses.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No course interest data recorded in MongoDB yet.</p>
+            ) : courses.map((c, idx) => (
               <div key={idx}>
                 <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
                   <span>{c.name}</span>

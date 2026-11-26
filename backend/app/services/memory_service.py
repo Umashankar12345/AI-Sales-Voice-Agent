@@ -30,8 +30,9 @@ def save_lead_memory(
     email: Optional[str] = None,
     phone: Optional[str] = None,
     session_id: Optional[str] = None,
+    org_id: str = "org_default",
 ) -> None:
-    """Persist a cross-call memory entry for a lead, deduplicating identical entries."""
+    """Persist a cross-call memory entry for a lead, scoped to org_id."""
     if not db.connected or db.db is None or not content.strip():
         return
     identity = _build_identity_filter(lead_id, email, phone)
@@ -39,11 +40,12 @@ def save_lead_memory(
         return
 
     clean_content = content.strip()
-    existing = db.db.lead_memories.find_one({**identity, "category": category, "content": clean_content})
+    existing = db.db.lead_memories.find_one({**identity, "org_id": org_id, "category": category, "content": clean_content})
     if existing:
         return
 
     doc = {
+        "org_id": org_id,
         "lead_id": str(lead_id) if lead_id else None,
         "email": email.strip().lower() if email else None,
         "phone": phone.strip() if phone else None,
@@ -63,16 +65,18 @@ def get_lead_memories(
     email: Optional[str] = None,
     phone: Optional[str] = None,
     limit: int = 12,
+    org_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Retrieve chronological cross-call memories for a prospect."""
+    """Retrieve chronological cross-call memories for a prospect, scoped by org_id."""
     if not db.connected or db.db is None:
         return []
     identity = _build_identity_filter(lead_id, email, phone)
     if not identity:
         return []
 
+    query = {**identity, "org_id": org_id} if org_id else identity
     try:
-        cursor = db.db.lead_memories.find(identity).sort("created_at", -1).limit(limit)
+        cursor = db.db.lead_memories.find(query).sort("created_at", -1).limit(limit)
         memories = []
         for doc in cursor:
             memories.append({
@@ -92,9 +96,10 @@ def format_memory_context(
     lead_id: Optional[str] = None,
     email: Optional[str] = None,
     phone: Optional[str] = None,
+    org_id: Optional[str] = None,
 ) -> str:
     """Format stored cross-call memories into a concise prompt block for the AI."""
-    memories = get_lead_memories(lead_id=lead_id, email=email, phone=phone, limit=8)
+    memories = get_lead_memories(lead_id=lead_id, email=email, phone=phone, limit=8, org_id=org_id)
     if not memories:
         return ""
     lines = ["CROSS-CALL LEAD MEMORY (from previous interactions with this prospect):"]

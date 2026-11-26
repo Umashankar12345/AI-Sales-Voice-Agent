@@ -61,6 +61,31 @@ def run_audit_suite():
         cross_get = client.get(f"/api/leads/{lead_a_id}", headers=headers_b)
         assert cross_get.status_code == 404, f"Cross-tenant leak! {cross_get.status_code}"
 
+        # RBAC check: member gets 403 on admin-only route, admin gets 200
+        assert client.get("/api/auth/admin-check", headers=headers_b).status_code == 403
+        assert client.get("/api/auth/admin-check", headers=headers_a).status_code == 200
+
+        # Cross-tenant isolation on tasks, conversations, dashboard, audit_logs, appointments
+        t_a = client.post(f"/api/leads/{lead_a_id}/tasks", headers=headers_a, json={"title": f"OrgA_Task_{uid}"})
+        assert t_a.status_code == 200
+        tasks_b = client.get("/api/leads/tasks/all", headers=headers_b).json()["tasks"]
+        assert not any(f"OrgA_Task_{uid}" in t.get("title", "") for t in tasks_b), "Task leaked across orgs"
+
+        dash_b = client.get("/api/dashboard/stats", headers=headers_b).json()
+        assert dash_b["total_leads"] == 0, f"Org B dashboard should have 0 leads, got {dash_b}"
+
+        # Unknown RAG query returns 0 irrelevant chunks due to similarity threshold
+        unk = client.post("/api/knowledge/search", headers=headers_a, json={"query": "Mars rocket ticket price 2099", "top_k": 3})
+        assert unk.json()["retrieved_count"] == 0, f"Expected 0 chunks for unknown query, got {unk.json()}"
+
+        # Malformed PDF & >5MB upload & bad extension checks
+        bad_ext = client.post("/api/knowledge/upload", headers=headers_a, files={"file": ("malware.exe", b"MZ...", "application/octet-stream")})
+        assert bad_ext.status_code == 400
+        bad_pdf = client.post("/api/knowledge/upload", headers=headers_a, files={"file": ("broken.pdf", b"not-a-pdf", "application/pdf")})
+        assert bad_pdf.status_code == 400
+        big_file = client.post("/api/knowledge/upload", headers=headers_a, files={"file": ("big.txt", b"a" * (5 * 1024 * 1024 + 10), "text/plain")})
+        assert big_file.status_code == 413
+
         # CSV formula injection check
         csv_res = client.get("/api/leads/export/csv", headers=headers_a)
         assert csv_res.status_code == 200

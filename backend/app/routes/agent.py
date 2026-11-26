@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 import uuid
 from bson import ObjectId
 
+from app.auth import CurrentUser, get_optional_user
 from app.database import db
 from app.rag import rag_service
 from app.ai_service import ai_service
@@ -123,16 +124,17 @@ async def register_candidate(req: RegisterCandidateRequest):
     }
 
 @router.post("/interact")
-async def interact(req: InteractRequest):
+async def interact(req: InteractRequest, current: Optional[CurrentUser] = Depends(get_optional_user)):
     """
     Main conversational endpoint:
     1. Retrieves conversation history.
-    2. Searches course knowledge base using FAISS (RAG).
-    3. Generates conversational sales response with Gemini.
-    4. Extracts prospect details and computes rule-based lead score.
-    5. Saves lead and session transcript into MongoDB.
+    2. Searches course knowledge base using FAISS (RAG), scoped to org_id.
+    3. Generates conversational sales response with Groq/Gemini.
+    4. Extracts prospect details and computes rule-based lead score + BANT.
+    5. Saves lead, cross-call memory, and session transcript into MongoDB.
     6. Returns assistant voice-ready reply, RAG sources, and live lead metrics.
     """
+    org_id = current.org_id if current else "org_default"
     session_id = req.session_id or f"sess_{uuid.uuid4().hex[:12]}"
     user_text = req.message.strip()
 
@@ -182,8 +184,8 @@ async def interact(req: InteractRequest):
             if dnc_lead:
                 raise HTTPException(status_code=403, detail="Prospect has Do-Not-Call (DNC) enabled. Interaction blocked.")
 
-    # 2. Retrieve top-3 matching chunks via FAISS
-    rag_sources = rag_service.search(user_text, top_k=3)
+    # 2. Retrieve top-3 matching chunks via FAISS (org-scoped)
+    rag_sources = rag_service.search(user_text, top_k=3, org_id=org_id)
 
     # Merge registered candidate details with existing lead profile
     merged_lead = existing_lead_data.copy()
@@ -199,6 +201,7 @@ async def interact(req: InteractRequest):
         lead_id=lead_id,
         email=merged_lead.get("email"),
         phone=merged_lead.get("phone"),
+        org_id=org_id,
     )
     ai_result = ai_service.generate_response(
         user_text,
@@ -280,6 +283,7 @@ async def interact(req: InteractRequest):
                 summary_text = f"{resolved_name} inquired about {course_text}. Recent question: \"{user_text[:80]}\". Qualified as {lead_category} ({lead_score}/100) with {sentiment} interest."
 
             lead_payload = {
+                "org_id": org_id,
                 "name": resolved_name,
                 "email": resolved_email,
                 "phone": resolved_phone,
@@ -313,16 +317,17 @@ async def interact(req: InteractRequest):
 
             # Persist cross-call lead memory entries
             if course_text and course_text not in ("Tech Cohorts", "Not Interested"):
-                save_lead_memory("course_interest", f"Interested in {course_text}", lead_id=lead_id, email=resolved_email, phone=resolved_phone, session_id=session_id)
+                save_lead_memory("course_interest", f"Interested in {course_text}", lead_id=lead_id, email=resolved_email, phone=resolved_phone, session_id=session_id, org_id=org_id)
             if bant.get("total", 0) > 0:
-                save_lead_memory("bant", f"BANT {bant['total']}/100 ({bant['category']}) — Need: {bant['need']['level']}, Budget: {bant['budget']['level']}, Timeline: {bant['timeline']['level']}", lead_id=lead_id, email=resolved_email, phone=resolved_phone, session_id=session_id)
-            save_lead_memory("inquiry", f"Asked: {user_text[:120]}", lead_id=lead_id, email=resolved_email, phone=resolved_phone, session_id=session_id)
+                save_lead_memory("bant", f"BANT {bant['total']}/100 ({bant['category']}) — Need: {bant['need']['level']}, Budget: {bant['budget']['level']}, Timeline: {bant['timeline']['level']}", lead_id=lead_id, email=resolved_email, phone=resolved_phone, session_id=session_id, org_id=org_id)
+            save_lead_memory("inquiry", f"Asked: {user_text[:120]}", lead_id=lead_id, email=resolved_email, phone=resolved_phone, session_id=session_id, org_id=org_id)
 
             # Upsert conversation document
             db.db.conversations.update_one(
                 {"session_id": session_id},
                 {
                     "$set": {
+                        "org_id": org_id,
                         "session_id": session_id,
                         "lead_id": lead_id,
                         "customer_name": resolved_name,
@@ -349,6 +354,7 @@ async def interact(req: InteractRequest):
         email=merged_lead.get("email"),
         phone=merged_lead.get("phone"),
         limit=10,
+        org_id=org_id,
     )
 
     return {
@@ -383,15 +389,16 @@ async def interact(req: InteractRequest):
     }
 
 @router.get("/conversations")
-async def list_conversations(limit: int = 50, skip: int = 0):
+async def list_conversations(limit: int = 50, skip: int = 0, current: Optional[CurrentUser] = Depends(get_optional_user)):
     """
-    Returns list of saved conversation sessions for the Call History tab.
+    Returns list of saved conversation sessions for the Call History tab, scoped by org_id.
     """
     if not db.connected or db.db is None:
         return {"total": 0, "conversations": []}
     try:
-        total = db.db.conversations.count_documents({})
-        cursor = db.db.conversations.find({}).sort("updated_at", -1).skip(skip).limit(limit)
+        query: Dict[str, Any] = {"org_id": current.org_id} if current else {}
+        total = db.db.conversations.count_documents(query)
+        cursor = db.db.conversations.find(query).sort("updated_at", -1).skip(skip).limit(limit)
         results = []
         for doc in cursor:
             doc["id"] = str(doc.pop("_id"))
@@ -436,11 +443,13 @@ class EscalateRequest(BaseModel):
 
 
 @router.post("/escalate")
-async def escalate_to_human(req: EscalateRequest):
+async def escalate_to_human(req: EscalateRequest, current: Optional[CurrentUser] = Depends(get_optional_user)):
     """Escalate a conversation or lead to a human counselor and log an audit + follow-up task."""
+    org_id = current.org_id if current else "org_default"
     now = datetime.utcnow()
     if db.connected and db.db is not None:
         db.db.tasks.insert_one({
+            "org_id": org_id,
             "lead_id": req.lead_id,
             "session_id": req.session_id,
             "title": f"Human Escalation: {req.reason.strip()}",
@@ -449,6 +458,7 @@ async def escalate_to_human(req: EscalateRequest):
             "created_at": now,
         })
         db.db.audit_logs.insert_one({
+            "org_id": org_id,
             "action": "human_escalation",
             "lead_id": req.lead_id,
             "session_id": req.session_id,
@@ -462,10 +472,11 @@ async def escalate_to_human(req: EscalateRequest):
 
 
 @router.get("/audit-logs")
-async def get_audit_logs(limit: int = 50):
+async def get_audit_logs(limit: int = 50, current: Optional[CurrentUser] = Depends(get_optional_user)):
     if not db.connected or db.db is None:
         return {"logs": []}
-    cursor = db.db.audit_logs.find().sort("created_at", -1).limit(limit)
+    query: Dict[str, Any] = {"org_id": current.org_id} if current else {}
+    cursor = db.db.audit_logs.find(query).sort("created_at", -1).limit(limit)
     logs = []
     for doc in cursor:
         doc["id"] = str(doc.pop("_id"))

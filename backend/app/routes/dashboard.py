@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timedelta
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
+from app.auth import CurrentUser, get_optional_user
 from app.database import db
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
@@ -16,9 +17,9 @@ def serialize_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
     return doc
 
 @router.get("/stats")
-async def get_dashboard_stats():
+async def get_dashboard_stats(current: Optional[CurrentUser] = Depends(get_optional_user)):
     """
-    Computes all SaaS metrics live from MongoDB collections:
+    Computes all SaaS metrics live from MongoDB collections, scoped by org_id when authenticated:
     - Total leads
     - Hot, Warm, Cold leads breakdown
     - Total conversations
@@ -41,19 +42,21 @@ async def get_dashboard_stats():
         }
 
     try:
-        total_leads = db.db.leads.count_documents({})
-        hot_leads = db.db.leads.count_documents({"lead_category": "Hot"})
-        warm_leads = db.db.leads.count_documents({"lead_category": "Warm"})
-        cold_leads = db.db.leads.count_documents({"lead_category": "Cold"})
-        total_conversations = db.db.conversations.count_documents({})
-        total_appointments = db.db.appointments.count_documents({})
+        org_filter: Dict[str, Any] = {"org_id": current.org_id} if current else {}
+        total_leads = db.db.leads.count_documents(org_filter)
+        hot_leads = db.db.leads.count_documents({**org_filter, "lead_category": "Hot"})
+        warm_leads = db.db.leads.count_documents({**org_filter, "lead_category": "Warm"})
+        cold_leads = db.db.leads.count_documents({**org_filter, "lead_category": "Cold"})
+        total_conversations = db.db.conversations.count_documents(org_filter)
+        total_appointments = db.db.appointments.count_documents(org_filter)
 
         # Recent leads (last 8)
-        recent_cursor = db.db.leads.find().sort("created_at", -1).limit(8)
+        recent_cursor = db.db.leads.find(org_filter).sort("created_at", -1).limit(8)
         recent_leads = [serialize_doc(doc) for doc in recent_cursor]
 
         # Course distribution aggregation (top 5 programs for compact layout)
         course_pipeline = [
+            {"$match": org_filter},
             {"$group": {"_id": "$interested_course", "count": {"$sum": 1}}},
             {"$sort": {"count": -1}}
         ]

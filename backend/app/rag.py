@@ -179,6 +179,8 @@ class RAGPipeline:
                 for score, idx in zip(distances[0], indices[0]):
                     if idx < 0 or idx >= len(self.chunks):
                         continue
+                    if float(score) < 0.22:
+                        continue
                     chunk = self.chunks[idx]
                     if chunk.get("org_id", "public") not in allowed_orgs:
                         continue

@@ -135,7 +135,10 @@ class AIService:
                     booking_intent,
                     language
                 )
-                return future.result(timeout=3.5)
+                res = future.result(timeout=3.5)
+                res["is_fallback"] = False
+                res["provider_used"] = "groq"
+                return res
             except Exception as e:
                 logger.warning(f"Groq API error ({e}). Attempting secondary model fallback...")
 
@@ -152,14 +155,20 @@ class AIService:
                     booking_intent,
                     language
                 )
-                return future.result(timeout=4.0)
+                res = future.result(timeout=4.0)
+                res["is_fallback"] = False
+                res["provider_used"] = "gemini"
+                return res
             except concurrent.futures.TimeoutError:
                 logger.warning("Gemini API exceeded 4.0s limit. Switching to contextual counselor engine.")
             except Exception as e:
                 logger.warning(f"Gemini API call failed ({e}). Switching to contextual counselor engine.")
 
         # 3. Rule-based Intelligent Counselor Fallback
-        return self._generate_intelligent_fallback(user_message, conversation_history, cleaned_chunks, heuristic_lead, heuristic_sentiment, booking_intent, language)
+        res = self._generate_intelligent_fallback(user_message, conversation_history, cleaned_chunks, heuristic_lead, heuristic_sentiment, booking_intent, language)
+        res["is_fallback"] = True
+        res["provider_used"] = "deterministic_fallback"
+        return res
 
     def _call_groq(
         self,

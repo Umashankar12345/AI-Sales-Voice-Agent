@@ -201,3 +201,8 @@ def login(req: LoginRequest):
 @router.get("/me")
 def me(current: CurrentUser = Depends(get_current_user)):
     return current
+
+
+@router.get("/admin-check")
+def admin_check(current: CurrentUser = Depends(require_admin)):
+    return {"ok": True, "role": current.role, "org_id": current.org_id}
